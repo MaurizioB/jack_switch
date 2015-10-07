@@ -11,9 +11,9 @@ jack_switch can be used for both stereo and mono audio interfaces, has a tray
 icon enabled by default (that can be disabled via command line) and supports a
 simple global keyboard shortcut interface.  
 If the keyboard shortcut interface is enabled (by using *-k* switch) the
-default behaviour uses <Win>channel, where *<Win>* is the "Windows" key and
+default behaviour uses \<Win\>channel, where *\<Win\>* is the "Windows" key and
 *channel* is the channel number, starting from 1. You can use alternate
-keyboard modifiers (*<Ctrl>*, *<Alt>*, ...) combinations using the
+keyboard modifiers (*\<Ctrl\>*, *\<Alt\>*, ...) combinations using the
 *--modifiers* switch, just be careful for already assigned shortcuts - an alert on
 the terminal will alert you.  
 
@@ -56,7 +56,7 @@ Disable exclusive mode on startup, can be overrided from the GUI
 Enable global keyboard shortcut support (default uses modifier+n, where *modifier* is the 'Win' key and *n* is the output number, starting from 1)  
 
 --modifiers "MODIFIERS"  
-Keyboard modifiers (<Super> - aka *Windows key*, <Ctrl>, <Alt>, ...). Implies *-k*  
+Keyboard modifiers (\<Super\> - aka *Windows key*, \<Ctrl\>, \<Alt\>, ...). Implies *-k*  
 
 -f, --func-keys  
 Use F keys instead of numbers for global keyboard shortcut support. Implies *-k*  
