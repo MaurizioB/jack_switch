@@ -21,7 +21,7 @@ Keep in mind that this is a simple tool, still in development; it is intended
 for simple "on the go" tests, and cannot be used for high-end projects. I will
 try to add a buffer support to avoid sync problems, anyway.  
 
-jack_switch is distributed WITHOUT ANY WARRANTY, it's just a script I made up
+jack_switch is distributed **WITHOUT ANY WARRANTY**, it's just a script I made up
 because I needed it, and I thought it might be useful to other users like you.
 For any issues you can contact me at maurizio.berti on gmail, just keep in mind
 that I'm no programmer, I just code for fun. Enjoy!
@@ -43,7 +43,7 @@ Without any argument, jack_switch will start with stereo inputs and 2 stereo out
 
 optional arguments:  
 
--o, --outputs OUTPUTS (default, minimum: 2)  
+-o n, --outputs n (default and minimum: 2)  
 Number of outputs (output pairs for stereo); maximum is 10 for stereo, 20 for mono  
 
 -m, --mono  
@@ -55,7 +55,7 @@ Disable exclusive mode on startup, can be overrided from the GUI
 -k, --keyboard  
 Enable global keyboard shortcut support (default uses modifier+n, where *modifier* is the 'Win' key and *n* is the output number, starting from 1)  
 
---modifiers "MODIFIERS"  
+--modifiers "\<Mod1\>\<Mod2\>\<...\>"  
 Keyboard modifiers (\<Super\> - aka *Windows key*, \<Ctrl\>, \<Alt\>, ...). Implies *-k*  
 
 -f, --func-keys  

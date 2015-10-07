@@ -22,11 +22,11 @@ client_name = 'Switcher'
 
 def cmdline(*args):
     parser = argparse.ArgumentParser()
-    parser.add_argument('-o', '--outputs', type=int, help='outputs; default: 2 (maximum: 10 for stereo, 20 for mono)', default=2)
+    parser.add_argument('-o', '--outputs', metavar='n', type=int, help='number of outputs; default: 2 (maximum: 10 for stereo, 20 for mono)', default=2)
     parser.add_argument('-m', '--mono', help='set mono inputs and outputs', action='store_false')
     parser.add_argument('-x', '--no-exclusive', dest='exclusive', help='disable exclusive mode on startup', action='store_false')
     parser.add_argument('-k', '--keyboard', dest='keybinding', help='enable global keyboard shortcut support', action='store_false', default=False)
-    parser.add_argument('--modifiers', help='keyboard modifiers (<Super>, <Ctrl>, <Alt>, ...), remember to use quotes; implies -k')
+    parser.add_argument('--modifiers', metavar='"<Mod1><Mod2><...>"', help='keyboard modifiers (<Super>, <Ctrl>, <Alt>, ...), remember to use quotes; implies -k')
     parser.add_argument('-f', '--func-keys', dest='funkey', help='use F keys instead of numbers; implies -k', action='store_true', default=False)
 
     tray = parser.add_mutually_exclusive_group()
@@ -288,6 +288,13 @@ class Processor:
             except:
                 return
             #self.selector(self.group[val-1], val-1)
+        #TODO Check and fix the focus/selected strange behaviour
+        elif event.keyval == gtk.keysyms.Up and self.exclusive:
+            self.group[self.active-1].set_active(True)
+        elif event.keyval == gtk.keysyms.Down and self.exclusive:
+            if self.active+1 == output_n:
+                self.active = -1
+            self.group[self.active+1].set_active(True)
         elif event.keyval == gtk.keysyms.x:
             self.setter.set_active(not self.setter.get_active())
         elif event.keyval == gtk.keysyms.Escape:
