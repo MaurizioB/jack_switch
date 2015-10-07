@@ -37,12 +37,11 @@ def cmdline(*args):
     escape.add_argument('--noesc', help='disable close on Escape key', action='store_true')
     escape.add_argument('--escclose', help='always quit on Escape key', action='store_true')
 
-    parser.add_argument('-q', '--quiet', help='don\'t show sync errors', action='store_true')
+    parser.add_argument('--nostatusbar', dest='statusbar', help='disable sync errors status bar', action='store_false', default=True)
+    parser.add_argument('-q', '--quiet', help='don\'t show sync errors on terminal', action='store_true')
     return parser.parse_args()
 
 args = cmdline()
-
-print args.notray
 
 if not args.exclusive:
     exclusive = False
@@ -122,9 +121,12 @@ class Processor:
         self.input_stream = input_stream
         self.window = gtk.Window()
         self.window.set_title('Jack Switcher')
+        self.window.set_resizable(False)
         self.window.connect('delete-event', self.quit)
         self.window.connect('key-press-event', self.keypress)
         self.window.set_icon_from_file('jack_switch.png')
+        self.mainbox = gtk.VBox()
+        self.mainbox.set_border_width(1)
         hbox = gtk.HBox()
         sep = gtk.VSeparator()
         self.setter = gtk.CheckButton(label='E_xclusive')
@@ -154,7 +156,37 @@ class Processor:
         self.active = active
         self.output_ports = output_ports
 
-        self.window.add(hbox)
+        self.mainbox.pack_start(hbox, True, True, 0)
+
+        if args.statusbar:
+            statusbar = gtk.HBox(spacing=2)
+            #inframe = gtk.Frame()
+            self.insync_lbl = gtk.Entry()
+            self.insync_lbl.set_width_chars(5)
+            self.insync_lbl.set_text('In: 0')
+            self.insync_lbl.set_sensitive(False)
+            #inframe.add(self.insync_lbl)
+
+            #outframe = gtk.Frame()
+            self.outsync_lbl = gtk.Entry()
+            self.outsync_lbl.set_width_chars(5)
+            self.outsync_lbl.set_sensitive(False)
+            self.outsync_lbl.set_text('Out: 0')
+            #outframe.add(self.outsync_lbl)
+
+            #ratioframe = gtk.Frame()
+            self.ratio_lbl = gtk.Entry()
+            self.ratio_lbl.set_width_chars(8)
+            self.ratio_lbl.set_sensitive(False)
+            self.ratio_lbl.set_text('Ratio: 0')
+            #ratioframe.add(self.ratio_lbl)
+
+            statusbar.pack_start(self.insync_lbl, False, False, 1)
+            statusbar.pack_start(self.outsync_lbl, False, False, 1)
+            statusbar.pack_start(self.ratio_lbl, True, True, 1)
+
+            self.mainbox.pack_start(statusbar, True, True, 2)
+        self.window.add(self.mainbox)
 
         if not args.notray:
             self.icon = gtk.status_icon_new_from_file('jack_switch.png')
@@ -180,37 +212,35 @@ class Processor:
         self.jack_loop = gobject.idle_add(self.process_multi)
         self.keybinder()
 
-    def process(self):
-        try:
-            #array = tuple(empty_stream if not i==self.active else input_stream for i in range(output_n))
-            jack.process(numpy.concatenate(tuple(empty_stream if not i==self.active else input_stream for i in range(output_n))), input_stream)
-        except jack.InputSyncError:
-            if not args.quiet:
-                self.errors[0] += 1
-                sys.stdout.write('\r\x1b[K \033[1mInput: {}\033[0m\tOutput: {}\tRatio: {}'.format(self.errors[0], self.errors[1], self.error_ratio()))
-                sys.stdout.flush()
-        except jack.OutputSyncError:
-            if not args.quiet:
-                self.errors[1] += 1
-                sys.stdout.write('\r\x1b[K Input: {}\t\033[1mOutput: {}\033[0m\tRatio: {}'.format(self.errors[0], self.errors[1], self.error_ratio()))
-                sys.stdout.flush()
-        return True
-
     def process_multi(self):
         try:
             jack.process(numpy.concatenate(tuple(empty_stream if not self.output_ports[i] else input_stream for i in range(output_n))), input_stream)
         except jack.InputSyncError:
+            self.errors[0] += 1
+            if args.statusbar:
+                self.status_update(0)
             if not args.quiet:
-                self.errors[0] += 1
                 sys.stdout.write('\r\x1b[K \033[1mInput: {}\033[0m\tOutput: {}\tRatio: {}'.format(self.errors[0], self.errors[1], self.error_ratio()))
                 sys.stdout.flush()
         except jack.OutputSyncError:
+            self.errors[1] += 1
+            if args.statusbar:
+                self.status_update(1)
             if not args.quiet:
-                self.errors[1] += 1
                 sys.stdout.write('\r\x1b[K Input: {}\t\033[1mOutput: {}\033[0m\tRatio: {}'.format(self.errors[0], self.errors[1], self.error_ratio()))
                 sys.stdout.flush()
         return True
 
+    def status_update(self, latest):
+        if latest == 0:
+            insync = 'In: {}'.format(self.errors[0])
+            self.insync_lbl.set_width_chars(len(insync))
+            self.insync_lbl.set_text(insync)
+        else:
+            outsync = 'Out: {}'.format(self.errors[1])
+            self.outsync_lbl.set_width_chars(len(outsync))
+            self.outsync_lbl.set_text(outsync)
+        self.ratio_lbl.set_text(self.error_ratio())
 
     def error_ratio(self):
         tottime = time()-startup
@@ -298,6 +328,24 @@ class Processor:
             self.togglewin_menuitem.set_label('Show')
         self.menu.popup(None, None, None, button, time)
 
+
+
+    def process(self):
+        try:
+            #array = tuple(empty_stream if not i==self.active else input_stream for i in range(output_n))
+            jack.process(numpy.concatenate(tuple(empty_stream if not i==self.active else input_stream for i in range(output_n))), input_stream)
+        except jack.InputSyncError:
+            if not args.quiet:
+                self.errors[0] += 1
+                sys.stdout.write('\r\x1b[K \033[1mInput: {}\033[0m\tOutput: {}\tRatio: {}'.format(self.errors[0], self.errors[1], self.error_ratio()))
+                sys.stdout.flush()
+        except jack.OutputSyncError:
+            if not args.quiet:
+                self.errors[1] += 1
+                sys.stdout.write('\r\x1b[K Input: {}\t\033[1mOutput: {}\033[0m\tRatio: {}'.format(self.errors[0], self.errors[1], self.error_ratio()))
+                sys.stdout.flush()
+        return True
+
 class fake_key:
     string = ''
     keyval = ''
@@ -313,3 +361,4 @@ try:
     jack.detach()
 except:
     pass
+

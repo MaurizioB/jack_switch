@@ -73,5 +73,8 @@ Disable close (or quit, if tray is disabled) on Escape key
 --escclose  
 Always close on Escape key (mutually exclusive with *--noesc*  
 
+--nostatusbar  
+Disable sync errors status bar  
+
 -q, --quiet  
 Don't show sync errors in terminal  
