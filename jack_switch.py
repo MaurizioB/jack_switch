@@ -9,7 +9,7 @@
 # you. For any issues you can contact me at maurizio.berti on gmail, just keep
 # in mind that I'm no programmer, I just code for fun. Enjoy!
 
-import numpy, jack, argparse, sys
+import numpy, jack, argparse, sys, re
 from time import time as time
 import gtk, gobject
 try:
@@ -22,8 +22,10 @@ client_name = 'Switcher'
 
 def cmdline(*args):
     parser = argparse.ArgumentParser()
-    parser.add_argument('-o', '--outputs', metavar='n', type=int, help='number of outputs; default: 2 (maximum: 10 for stereo, 20 for mono)', default=2)
+    parser.add_argument('-o', '--outports', metavar='n', type=int, help='number of outputs; default: 2 (maximum: 10 for stereo, 20 for mono)', default=2)
     parser.add_argument('-m', '--mono', help='set mono inputs and outputs', action='store_false')
+    parser.add_argument('-I', '--input', metavar='client:port[*]', help='jack port[s] to try to auto connect to its inputs on startup')
+    parser.add_argument('-O', '--output', metavar='client:port[*]', help='jack port[s] to try to auto connect to its outputs on startup')
     parser.add_argument('-x', '--no-exclusive', dest='exclusive', help='disable exclusive mode on startup', action='store_false')
     parser.add_argument('-k', '--keyboard', dest='keybinding', help='enable global keyboard shortcut support', action='store_false', default=False)
     parser.add_argument('--modifiers', metavar='"<Mod1><Mod2><...>"', help='keyboard modifiers (<Super>, <Ctrl>, <Alt>, ...), remember to use quotes; implies -k')
@@ -42,6 +44,8 @@ def cmdline(*args):
     return parser.parse_args()
 
 args = cmdline()
+
+print args.input
 
 if not args.exclusive:
     exclusive = False
@@ -74,17 +78,17 @@ if not args.mono:
 else:
     channels = 2
 
-if args.outputs < 2:
+if args.outports < 2:
     output_n = 2
-elif args.outputs > 10:
+elif args.outports > 10:
     if channels == 2:
         output_n = 10
         print 'Sorry, 20 outputs is the maximum output port number'
-    elif args.outputs > 20:
+    elif args.outports > 20:
         output_n = 20
         print 'Sorry, 20 outputs is the maximum output port number'
 else:
-    output_n = args.outputs
+    output_n = args.outports
 
 output_ports = [True if i==0 else False for i in range(output_n)]
 active = 0
@@ -99,11 +103,14 @@ empty_stream = numpy.zeros((channels, buf_size), 'f')
 #output_stream = numpy.zeros((4, buf_size), 'f')
 #input_buffer = numpy.zeros((2, buf_size), 'f')
 
+input_ports = []
 if channels == 2:
     jack.register_port('input L', jack.IsInput)
+    input_ports.append(client_name + ':' + 'input L')
     jack.register_port('input R', jack.IsInput)
+    input_ports.append(client_name + ':' + 'input R')
 else:
-    jack.register_port('input', jack.IsInput)
+    input_ports.append(jack.register_port('input', jack.IsInput))
 
 
 for i in range(output_n):
@@ -114,11 +121,38 @@ for i in range(output_n):
         jack.register_port('output {}'.format(i+1), jack.IsOutput)
 
 jack.activate()
+
+if args.input:
+    if ',' in args.input:
+        capture_ports = args.input.split(',')
+    else:
+        jack_capture_ports = [p for p in jack.get_ports() if jack.get_port_flags(p) & jack.IsOutput]
+        try:
+            request = re.compile(args.input)
+            capture_ports = [s.string for i in jack_capture_ports for s in [re.match(request, i)] if s]
+        except:
+            print 'input ports not valid'
+    i = 0
+    for p in capture_ports:
+        try:
+            print 'connect {} to {}'.format(p, input_ports[i])
+            jack.connect(p, input_ports[i])
+            i += 1
+            if i >= len(input_ports):
+                i = 0
+        except Exception as err:
+            print err
+            print 'failed to connect: (\'{}\', \'{}\')'.format(p, input_ports[i])
+            break
+
 startup = time()
 
 class Processor:
     def __init__(self):
         self.input_stream = input_stream
+        self.output_ports = output_ports
+        self.output_n = output_n
+
         self.window = gtk.Window()
         self.window.set_title('Jack Switcher')
         self.window.set_resizable(False)
@@ -135,26 +169,21 @@ class Processor:
         hbox.pack_end(self.setter, True, True, 10)
         hbox.pack_end(sep, True, True, 5)
 
-        vbox = gtk.VBox()
-        first = gtk.CheckButton(label='output 1')
-        first.set_active(True)
-        vbox.pack_start(first, True, True, 0)
-        self.group = [first]
+        self.outport_box = gtk.VBox()
+
+        self.group = []
         self.setter.connect('toggled', self.toggle_exclusive)
-        first.connect('toggled', self.selector, 0)
 
-        for o in range(output_n-1):
-            item = gtk.CheckButton(label='output {}'.format(o+2))
-            vbox.pack_start(item, True, True, 0)
+        for o in range(self.output_n):
+            item = gtk.CheckButton(label='output {}'.format(o+1))
+            self.outport_box.pack_start(item, True, True, 0)
             self.group.append(item)
+            item.connect('toggled', self.selector, o)
+        self.outport_box.get_children()[0].set_active(True)
 
-        for i, item in enumerate(self.group[1:]):
-            item.connect('toggled', self.selector, i+1)
-
-        hbox.pack_start(vbox, True, True, 10)
+        hbox.pack_start(self.outport_box, True, True, 10)
 
         self.active = active
-        self.output_ports = output_ports
 
         self.mainbox.pack_start(hbox, True, True, 0)
 
@@ -209,12 +238,12 @@ class Processor:
             self.window.show_all()
         self.errors = [0, 0]
 
-        self.jack_loop = gobject.idle_add(self.process_multi)
+        self.jack_loop = gobject.idle_add(self.process_multi, priority=gobject.PRIORITY_DEFAULT_IDLE+10)
         self.keybinder()
 
     def process_multi(self):
         try:
-            jack.process(numpy.concatenate(tuple(empty_stream if not self.output_ports[i] else input_stream for i in range(output_n))), input_stream)
+            jack.process(numpy.concatenate(tuple(empty_stream if not self.output_ports[i] else input_stream for i in range(self.output_n))), input_stream)
         except jack.InputSyncError:
             self.errors[0] += 1
             if args.statusbar:
@@ -292,11 +321,15 @@ class Processor:
         elif event.keyval == gtk.keysyms.Up and self.exclusive:
             self.group[self.active-1].set_active(True)
         elif event.keyval == gtk.keysyms.Down and self.exclusive:
-            if self.active+1 == output_n:
+            if self.active+1 == self.output_n:
                 self.active = -1
             self.group[self.active+1].set_active(True)
         elif event.keyval == gtk.keysyms.x:
             self.setter.set_active(not self.setter.get_active())
+        elif event.keyval == gtk.keysyms.plus:
+            self.add_ports()
+        elif event.keyval == gtk.keysyms.minus:
+            self.del_ports()
         elif event.keyval == gtk.keysyms.Escape:
             if args.noesc:
                 return
@@ -308,13 +341,39 @@ class Processor:
 
     def keybinder(self):
         if keybinding:
-            for i in range(output_n):
+            for i in range(self.output_n):
                 kb_output = keybinder.bind(modifiers+funkey+str(i+1), self.keypress, None, fake_key, i+1)
                 if not kb_output:
                     print 'check configuration or try custom key modifiers'
 
-    def test(self, output):
-        print output
+    def add_ports(self):
+        if (self.output_n == 10 and channels == 2) or (self.output_n == 20):
+            return
+        self.output_n += 1
+        item = gtk.CheckButton(label='output {}'.format(self.output_n))
+        self.outport_box.pack_start(item, True, True, 0)
+        item.show()
+        self.group.append(item)
+        self.output_ports.append(False)
+        if channels == 2:
+            jack.register_port('output {} L'.format(self.output_n), jack.IsOutput)
+            jack.register_port('output {} R'.format(self.output_n), jack.IsOutput)
+        else:
+            jack.register_port('output {}'.format(self.output_n), jack.IsOutput)
+        item.connect('toggled', self.selector, self.output_n-1)
+
+    def del_ports(self):
+        if self.output_n == 2:
+            return
+        self.outport_box.remove(self.outport_box.get_children()[-1])
+        if channels == 2:
+            jack.unregister_port('output {} L'.format(self.output_n))
+            jack.unregister_port('output {} R'.format(self.output_n))
+        else:
+            jack.unregister_port('output {}'.format(self.output_n))
+        self.output_n -= 1
+        self.group.pop()
+        self.output_ports.pop()
 
     def quit(self, *args):
         jack.deactivate()
@@ -340,7 +399,7 @@ class Processor:
     def process(self):
         try:
             #array = tuple(empty_stream if not i==self.active else input_stream for i in range(output_n))
-            jack.process(numpy.concatenate(tuple(empty_stream if not i==self.active else input_stream for i in range(output_n))), input_stream)
+            jack.process(numpy.concatenate(tuple(empty_stream if not i==self.active else input_stream for i in range(self.output_n))), input_stream)
         except jack.InputSyncError:
             if not args.quiet:
                 self.errors[0] += 1

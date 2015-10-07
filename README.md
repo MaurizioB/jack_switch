@@ -10,6 +10,8 @@ reverb type, ...), then jack_switch might be helpful.
 jack_switch can be used for both stereo and mono audio interfaces, has a tray
 icon enabled by default (that can be disabled via command line) and supports a
 simple global keyboard shortcut interface.  
+Once activated it shows the available outputs, that can be also enabled or
+disabled using numbers on your keyboard. Use "x" to toggle the exclusive mode.  
 If the keyboard shortcut interface is enabled (by using *-k* switch) the
 default behaviour uses \<Win\>channel, where *\<Win\>* is the "Windows" key and
 *channel* is the channel number, starting from 1. You can use alternate
@@ -37,7 +39,7 @@ Requirements:
 Usage:
 ------
 
-    jack_switch.py [-h] [-o OUTPUTS] [-m] [-x] [-k] [--modifiers MODIFIERS] [-f] [-q]
+    jack_switch.py [-h] [-o n] [-m] [-x] [-k] [--modifiers \<Mod1\>\<Mod2\>\<...\>] [-f] [-q]
 
 Without any argument, jack_switch will start with stereo inputs and 2 stereo outputs  
 
