@@ -24,38 +24,51 @@ def cmdline(*args):
     parser = argparse.ArgumentParser()
     parser.add_argument('-o', '--outputs', type=int, help='outputs; default: 2 (maximum: 10 for stereo, 20 for mono)', default=2)
     parser.add_argument('-m', '--mono', help='set mono inputs and outputs', action='store_false')
-    parser.add_argument('-x', '--no-exclusive', dest='exclusive', help='unset exclusive mode', action='store_false')
+    parser.add_argument('-x', '--no-exclusive', dest='exclusive', help='disable exclusive mode on startup', action='store_false')
     parser.add_argument('-k', '--keyboard', dest='keybinding', help='enable global keyboard shortcut support', action='store_false', default=False)
-    parser.add_argument('--modifiers', help='keyboard modifiers (<Super>, <Ctrl>, <Alt>, ...)')
-    parser.add_argument('-f', '--func-keys', dest='funkey', help='use F keys instead of numbers', action='store_true', default=False)
+    parser.add_argument('--modifiers', help='keyboard modifiers (<Super>, <Ctrl>, <Alt>, ...), remember to use quotes; implies -k')
+    parser.add_argument('-f', '--func-keys', dest='funkey', help='use F keys instead of numbers; implies -k', action='store_true', default=False)
+
+    tray = parser.add_mutually_exclusive_group()
+    tray.add_argument('-t', '--hidetotray', help='start hidden to system tray', action='store_true')
+    tray.add_argument('--notray', help='disable tray support', action='store_true')
+
+    escape = parser.add_mutually_exclusive_group()
+    escape.add_argument('--noesc', help='disable close on Escape key', action='store_true')
+    escape.add_argument('--escclose', help='always quit on Escape key', action='store_true')
+
     parser.add_argument('-q', '--quiet', help='don\'t show sync errors', action='store_true')
     return parser.parse_args()
 
 args = cmdline()
+
+print args.notray
 
 if not args.exclusive:
     exclusive = False
 else:
     exclusive = True
 
-if args.keybinding and keybinding:
-    #keybinder.init()
-    keybinding = True
-else:
-    keybinding = False
-
 if keybinding:
     if not args.modifiers:
         modifiers = '<Super>'
     else:
         modifiers = args.modifiers
+        args.keybinding = True
 else:
     modifiers = None
 
 if args.funkey:
     funkey = 'F'
+    args.keybinding = True
 else:
     funkey = ''
+
+if args.keybinding and keybinding:
+    #keybinder.init()
+    keybinding = True
+else:
+    keybinding = False
 
 if not args.mono:
     channels = 1
@@ -104,18 +117,6 @@ for i in range(output_n):
 jack.activate()
 startup = time()
 
-try:
-    jack.connect('sblive:capture_9', 'Switcher:input_l')
-    jack.connect('sblive:capture_10', 'Switcher:input_r')
-    jack.connect('Switcher:output_l', 'jm-sblive:sblive L')
-    jack.connect('Switcher:output_r', 'jm-sblive:sblive R')
-    jack.connect('Switcher:output2_l', 'jm-sblive:aux L')
-    jack.connect('Switcher:output2_r', 'jm-sblive:aux R')
-    jack.disconnect('sblive:capture_9', 'jm-sblive:sblive L')
-    jack.disconnect('sblive:capture_10', 'jm-sblive:sblive R')
-except:
-    pass
-
 class Processor:
     def __init__(self):
         self.input_stream = input_stream
@@ -123,12 +124,13 @@ class Processor:
         self.window.set_title('Jack Switcher')
         self.window.connect('delete-event', self.quit)
         self.window.connect('key-press-event', self.keypress)
+        self.window.set_icon_from_file('jack_switch.png')
         hbox = gtk.HBox()
         sep = gtk.VSeparator()
-        setter = gtk.CheckButton(label='Exclusive')
+        self.setter = gtk.CheckButton(label='E_xclusive')
         self.exclusive = exclusive
-        setter.set_active(self.exclusive)
-        hbox.pack_end(setter, True, True, 10)
+        self.setter.set_active(self.exclusive)
+        hbox.pack_end(self.setter, True, True, 10)
         hbox.pack_end(sep, True, True, 5)
 
         vbox = gtk.VBox()
@@ -136,7 +138,7 @@ class Processor:
         first.set_active(True)
         vbox.pack_start(first, True, True, 0)
         self.group = [first]
-        setter.connect('toggled', self.toggle_exclusive)
+        self.setter.connect('toggled', self.toggle_exclusive)
         first.connect('toggled', self.selector, 0)
 
         for o in range(output_n-1):
@@ -154,7 +156,25 @@ class Processor:
 
         self.window.add(hbox)
 
-        self.window.show_all()
+        if not args.notray:
+            self.icon = gtk.status_icon_new_from_file('jack_switch.png')
+            self.icon.set_tooltip('Jack Switch')
+            self.menu = gtk.Menu()
+            self.togglewin_menuitem = gtk.MenuItem('')
+            self.togglewin_menuitem.connect('activate', self.window_toggle)
+            self.menu.append(self.togglewin_menuitem)
+            quitter = gtk.ImageMenuItem(stock_id=gtk.STOCK_QUIT)
+            quitter.connect('activate', self.quit)
+            self.menu.append(quitter)
+            self.menu.show_all()
+            self.icon.connect('popup-menu', self.popup)
+            self.icon.connect('activate', self.window_toggle)
+        else:
+            self.icon = None
+
+
+        if not args.hidetotray:
+            self.window.show_all()
         self.errors = [0, 0]
 
         self.jack_loop = gobject.idle_add(self.process_multi)
@@ -238,8 +258,16 @@ class Processor:
             except:
                 return
             #self.selector(self.group[val-1], val-1)
+        elif event.keyval == gtk.keysyms.x:
+            self.setter.set_active(not self.setter.get_active())
         elif event.keyval == gtk.keysyms.Escape:
-            self.quit()
+            if args.noesc:
+                return
+            if args.escclose:
+                self.quit()
+            if args.notray:
+                self.quit()
+            self.window.hide()
 
     def keybinder(self):
         if keybinding:
@@ -256,6 +284,19 @@ class Processor:
         jack.detach()
         gtk.main_quit()
         print ''
+
+    def window_toggle(self, status_icon):
+        if self.window.get_visible():
+            self.window.hide()
+        else:
+            self.window.show_all()
+
+    def popup(self, status_icon, button, time):
+        if self.window.get_visible():
+            self.togglewin_menuitem.set_label('Hide')
+        else:
+            self.togglewin_menuitem.set_label('Show')
+        self.menu.popup(None, None, None, button, time)
 
 class fake_key:
     string = ''
