@@ -9,9 +9,12 @@
 # you. For any issues you can contact me at maurizio.berti on gmail, just keep
 # in mind that I'm no programmer, I just code for fun. Enjoy!
 
-import numpy, jack, argparse, sys, re
+import argparse, sys, re
 from time import time as time
+
 import gtk, gobject
+import numpy, jack
+
 try:
     import keybinder
     keybinding = True
