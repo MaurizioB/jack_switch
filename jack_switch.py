@@ -18,7 +18,7 @@ import numpy, jack
 try:
     import keybinder
     keybinding = True
-except:
+except ImportError:
     keybinding = False
 
 client_name = 'Switcher'
@@ -50,10 +50,7 @@ args = cmdline()
 
 print args.input
 
-if not args.exclusive:
-    exclusive = False
-else:
-    exclusive = True
+exclusive = args.exclusive
 
 if keybinding:
     if not args.modifiers:
@@ -70,16 +67,9 @@ if args.funkey:
 else:
     funkey = ''
 
-if args.keybinding and keybinding:
-    #keybinder.init()
-    keybinding = True
-else:
-    keybinding = False
+keybinding = args.keybinding and keybinding
 
-if not args.mono:
-    channels = 1
-else:
-    channels = 2
+channels = 1 if args.mono else 2
 
 if args.outports < 2:
     output_n = 2
@@ -93,7 +83,7 @@ elif args.outports > 10:
 else:
     output_n = args.outports
 
-output_ports = [True if i==0 else False for i in range(output_n)]
+output_ports = [True] + [False]*(output_n-1) if output_n>0 else []
 active = 0
 
 jack.attach(client_name)
