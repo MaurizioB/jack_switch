@@ -26,7 +26,7 @@ client_name = 'Switcher'
 def cmdline(*args):
     parser = argparse.ArgumentParser()
     parser.add_argument('-o', '--outports', metavar='n', type=int, help='number of outputs; default: 2 (maximum: 10 for stereo, 20 for mono)', default=2)
-    parser.add_argument('-m', '--mono', help='set mono inputs and outputs', action='store_false')
+    parser.add_argument('-m', '--mono', help='set mono inputs and outputs', action='store_true')
     parser.add_argument('-I', '--input', metavar='client:port[*]', help='jack port[s] to try to auto connect to its inputs on startup')
     parser.add_argument('-O', '--output', metavar='client:port[*]', help='jack port[s] to try to auto connect to its outputs on startup')
     parser.add_argument('-x', '--no-exclusive', dest='exclusive', help='disable exclusive mode on startup', action='store_false')
