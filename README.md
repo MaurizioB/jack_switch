@@ -28,22 +28,32 @@ because I needed it, and I thought it might be useful to other users like you.
 For any issues you can contact me at maurizio.berti on gmail, just keep in mind
 that I'm no programmer, I just code for fun. Enjoy!
 
+PS: I know that this small program might have too many options and support for
+what it actually does, I just took the chance to improve my programming skills
+by exploring all possible options.
+
 
 Requirements:
 -------------
 
-- pygtk2, keybinding
 - [pyjack](https://pypi.python.org/pypi/py-jack/)
+- pygtk2
 - numpy
+- keybinding (for global shortcut support, optional)
 
 Usage:
 ------
 
     jack_switch.py [-h] [-o n] [-m] [-x] [-k] [--modifiers \<Mod1\>\<Mod2\>\<...\>] [-f] [-q]
 
-Without any argument, jack_switch will start with stereo inputs and 2 stereo outputs  
+Without any argument, jack_switch will start with stereo inputs and 2 stereo outputs.  
+Just connect the input port[s] with your jack client output and output ports
+with your plugins, system outputs... Then toggle the outputs using the GUI or
+keyboard shortcuts. You can use number keys (or F-keys enabling -f switch),
+eventually associated with keyboard modifiers (see -k) for global keybindings
+when the application is not focused.
 
-optional arguments:  
+##Optional arguments:  
 
 -o n, --outputs n (default and minimum: 2)  
 Number of outputs (output pairs for stereo); maximum is 10 for stereo, 20 for mono  

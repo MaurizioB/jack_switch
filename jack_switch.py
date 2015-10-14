@@ -57,7 +57,7 @@ if args.keybinding:
         modifiers = args.modifiers
     args.keybinding = True
 else:
-    modifiers = None
+    modifiers = ''
 
 if args.funkey:
     funkey = 'F'
