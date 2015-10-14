@@ -30,7 +30,7 @@ def cmdline(*args):
     parser.add_argument('-I', '--input', metavar='client:port[*]', help='jack port[s] to try to auto connect to its inputs on startup')
     parser.add_argument('-O', '--output', metavar='client:port[*]', help='jack port[s] to try to auto connect to its outputs on startup')
     parser.add_argument('-x', '--no-exclusive', dest='exclusive', help='disable exclusive mode on startup', action='store_false')
-    parser.add_argument('-k', '--keyboard', dest='keybinding', help='enable global keyboard shortcut support', action='store_false', default=False)
+    parser.add_argument('-k', '--keyboard', dest='keybinding', help='enable global keyboard shortcut support', action='store_true', default=False)
     parser.add_argument('--modifiers', metavar='"<Mod1><Mod2><...>"', help='keyboard modifiers (<Super>, <Ctrl>, <Alt>, ...), remember to use quotes; implies -k')
     parser.add_argument('-f', '--func-keys', dest='funkey', help='use F keys instead of numbers; implies -k', action='store_true', default=False)
 
@@ -50,7 +50,7 @@ args = cmdline()
 
 exclusive = args.exclusive
 
-if keybinding:
+if args.keybinding:
     if not args.modifiers:
         modifiers = '<Super>'
     else:
@@ -153,30 +153,45 @@ class Processor:
         self.window.set_icon_from_file('jack_switch.png')
         self.mainbox = gtk.VBox()
         self.mainbox.set_border_width(1)
-        hbox = gtk.HBox()
-        sep = gtk.VSeparator()
+
+        toolbox = gtk.VBox()
         self.setter = gtk.CheckButton(label='E_xclusive')
         self.setter.set_can_focus(False)
         self.setter.connect('realize', self.restyle)
         self.exclusive = exclusive
         self.setter.set_active(self.exclusive)
-        hbox.pack_end(self.setter, True, True, 10)
-        hbox.pack_end(sep, True, True, 5)
+        self.fullmute = gtk.CheckButton(label='Allow _full mute')
+        self.fullmute.set_can_focus(False)
+        btns = gtk.HBox()
+        add_btn = gtk.Button('+')
+        add_btn.set_can_focus(False)
+        add_btn.connect('clicked', self.add_ports)
+        del_btn = gtk.Button('-')
+        del_btn.set_can_focus(False)
+        del_btn.connect('clicked', self.del_ports)
+        btns.pack_start(add_btn, True, True, 0)
+        btns.pack_start(del_btn, True, True, 0)
+        toolbox.pack_start(self.setter, False, False, 0)
+        toolbox.pack_start(self.fullmute, False, False, 0)
+        toolbox.pack_start(btns, False, False, 0)
 
         self.outport_box = gtk.VBox()
-
         self.group = []
         self.setter.connect('toggled', self.toggle_exclusive)
 
         for o in range(self.output_n):
             item = gtk.CheckButton(label='output {}'.format(o+1))
-            self.outport_box.pack_start(item, True, True, 0)
+            self.outport_box.pack_start(item, False, False, 0)
             self.group.append(item)
             item.connect('toggled', self.selector, o)
             #item.connect('focus-in-event', self.grabbed)
         self.outport_box.get_children()[0].set_active(True)
 
+        hbox = gtk.HBox()
         hbox.pack_start(self.outport_box, True, True, 10)
+        sep = gtk.VSeparator()
+        hbox.pack_start(sep, True, True, 5)
+        hbox.pack_start(toolbox, True, True, 10)
 
         self.active = active
 
@@ -281,6 +296,10 @@ class Processor:
 
     def selector(self, widget, selected):
         if not widget.get_active():
+            noneselected = [item for item in self.group if item.get_active()]
+            if not noneselected and self.exclusive and not self.fullmute.get_active():
+                widget.set_active(True)
+                return
             self.output_ports[selected] = False
             return
         if self.exclusive:
@@ -294,8 +313,10 @@ class Processor:
 
     def toggle_exclusive(self, widget):
         if not widget.get_active():
+            self.fullmute.set_sensitive(False)
             self.exclusive = False
         else:
+            self.fullmute.set_sensitive(True)
             self.exclusive = True
             for i, item in enumerate(self.group):
                 if i != self.active:
@@ -312,7 +333,7 @@ class Processor:
             if val == 0:
                 val = 10
             try:
-                if self.exclusive:
+                if self.exclusive and not self.fullmute.get_active():
                     self.group[val-1].set_active(True)
                 else:
                     self.group[val-1].set_active(not self.group[val-1].get_active())
@@ -347,6 +368,8 @@ class Processor:
             return True
         elif event.keyval == gtk.keysyms.x:
             self.setter.set_active(not self.setter.get_active())
+        elif event.keyval == gtk.keysyms.f:
+            self.fullmute.set_active(not self.fullmute.get_active())
         elif event.keyval == gtk.keysyms.plus:
             self.add_ports()
         elif event.keyval == gtk.keysyms.minus:
@@ -361,13 +384,13 @@ class Processor:
             self.window.hide()
 
     def bind(self, k):
+        if not keybinding:
+            return
         kb_output = keybinder.bind(modifiers+funkey+str(k), self.keypress, None, fake_key, k)
         if not kb_output:
-            if modifiers: mod = modifiers+'+'
+            if modifiers: mod = '>+<'.join(modifiers.split('><'))+'+'
             else: mod = ''
-            if funkey: fk = funkey+'+'
-            else: fk = ''
-            print 'Error! Check configuration or try custom key modifiers ({}{}{})'.format(mod, fk, k)
+            print 'Error! Check configuration or try custom key modifiers ("{}{}{}")'.format(mod, funkey, k)
         self.keybindings[k] = kb_output
 
     def unbind(self, k):
@@ -389,12 +412,12 @@ class Processor:
                     #else: fk = ''
                     #print 'Error! Check configuration or try custom key modifiers ({}{}{})'.format(mod, fk, i+1)
 
-    def add_ports(self):
+    def add_ports(self, widget=None):
         if (self.output_n == 10 and channels == 2) or (self.output_n == 20):
             return
         self.output_n += 1
         item = gtk.CheckButton(label='output {}'.format(self.output_n))
-        self.outport_box.pack_start(item, True, True, 0)
+        self.outport_box.pack_start(item, False, False, 0)
         item.show()
         self.group.append(item)
         self.output_ports.append(False)
@@ -406,7 +429,7 @@ class Processor:
         item.connect('toggled', self.selector, self.output_n-1)
         self.bind(self.output_n)
 
-    def del_ports(self):
+    def del_ports(self, widget=None):
         if self.output_n == 2:
             return
         lastport = self.group[-1]
