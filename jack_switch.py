@@ -48,8 +48,6 @@ def cmdline(*args):
 
 args = cmdline()
 
-print args.input
-
 exclusive = args.exclusive
 
 if keybinding:
@@ -57,7 +55,7 @@ if keybinding:
         modifiers = '<Super>'
     else:
         modifiers = args.modifiers
-        args.keybinding = True
+    args.keybinding = True
 else:
     modifiers = None
 
@@ -73,6 +71,7 @@ channels = 1 if args.mono else 2
 
 if args.outports < 2:
     output_n = 2
+    print 'Minimum output port number is 2'
 elif args.outports > 10:
     if channels == 2:
         output_n = 10
@@ -157,6 +156,8 @@ class Processor:
         hbox = gtk.HBox()
         sep = gtk.VSeparator()
         self.setter = gtk.CheckButton(label='E_xclusive')
+        self.setter.set_can_focus(False)
+        self.setter.connect('realize', self.restyle)
         self.exclusive = exclusive
         self.setter.set_active(self.exclusive)
         hbox.pack_end(self.setter, True, True, 10)
@@ -172,6 +173,7 @@ class Processor:
             self.outport_box.pack_start(item, True, True, 0)
             self.group.append(item)
             item.connect('toggled', self.selector, o)
+            #item.connect('focus-in-event', self.grabbed)
         self.outport_box.get_children()[0].set_active(True)
 
         hbox.pack_start(self.outport_box, True, True, 10)
@@ -232,7 +234,14 @@ class Processor:
         self.errors = [0, 0]
 
         self.jack_loop = gobject.idle_add(self.process_multi, priority=gobject.PRIORITY_DEFAULT_IDLE+10)
+        self.keybindings = {}
         self.keybinder()
+
+    def restyle(self, widget):
+        style = widget.get_style().copy()
+        style.bg[gtk.STATE_PRELIGHT] = style.bg[gtk.STATE_NORMAL]
+        widget.set_style(style)
+
 
     def process_multi(self):
         try:
@@ -310,13 +319,32 @@ class Processor:
             except:
                 return
             #self.selector(self.group[val-1], val-1)
-        #TODO Check and fix the focus/selected strange behaviour
-        elif event.keyval == gtk.keysyms.Up and self.exclusive:
-            self.group[self.active-1].set_active(True)
-        elif event.keyval == gtk.keysyms.Down and self.exclusive:
-            if self.active+1 == self.output_n:
-                self.active = -1
-            self.group[self.active+1].set_active(True)
+
+        elif event.keyval == gtk.keysyms.Up:
+            if not self.exclusive:
+                if self.group[0].is_focus():
+                    self.group[-1].grab_focus()
+                    return True
+                return False
+            self.active = self.active - 1
+            self.group[self.active].set_active(True)
+            self.group[self.active].grab_focus()
+            return True
+        elif event.keyval == gtk.keysyms.Down:
+            if not self.exclusive:
+                if self.group[-1].is_focus():
+                    self.group[0].grab_focus()
+                    return True
+                return False
+            self.active = self.active + 1
+            if self.active == self.output_n:
+                self.active = 0
+            #if self.active+1 == self.output_n:
+                #self.active = -1
+            #self.group[self.active+1].set_active(True)
+            self.group[self.active].set_active(True)
+            self.group[self.active].grab_focus()
+            return True
         elif event.keyval == gtk.keysyms.x:
             self.setter.set_active(not self.setter.get_active())
         elif event.keyval == gtk.keysyms.plus:
@@ -332,12 +360,34 @@ class Processor:
                 self.quit()
             self.window.hide()
 
+    def bind(self, k):
+        kb_output = keybinder.bind(modifiers+funkey+str(k), self.keypress, None, fake_key, k)
+        if not kb_output:
+            if modifiers: mod = modifiers+'+'
+            else: mod = ''
+            if funkey: fk = funkey+'+'
+            else: fk = ''
+            print 'Error! Check configuration or try custom key modifiers ({}{}{})'.format(mod, fk, k)
+        self.keybindings[k] = kb_output
+
+    def unbind(self, k):
+        if self.keybindings.get(k):
+            try:
+                keybinder.unbind(modifiers+funkey+str(k))
+            except:
+                pass
+
     def keybinder(self):
         if keybinding:
-            for i in range(self.output_n):
-                kb_output = keybinder.bind(modifiers+funkey+str(i+1), self.keypress, None, fake_key, i+1)
-                if not kb_output:
-                    print 'check configuration or try custom key modifiers'
+            for k in range(1, self.output_n+1):
+                self.bind(k)
+                #kb_output = keybinder.bind(modifiers+funkey+str(i+1), self.keypress, None, fake_key, i+1)
+                #if not kb_output:
+                    #if modifiers: mod = modifiers+'+'
+                    #else: mod = ''
+                    #if funkey: fk = funkey+'+'
+                    #else: fk = ''
+                    #print 'Error! Check configuration or try custom key modifiers ({}{}{})'.format(mod, fk, i+1)
 
     def add_ports(self):
         if (self.output_n == 10 and channels == 2) or (self.output_n == 20):
@@ -354,11 +404,15 @@ class Processor:
         else:
             jack.register_port('output {}'.format(self.output_n), jack.IsOutput)
         item.connect('toggled', self.selector, self.output_n-1)
+        self.bind(self.output_n)
 
     def del_ports(self):
         if self.output_n == 2:
             return
-        self.outport_box.remove(self.outport_box.get_children()[-1])
+        lastport = self.group[-1]
+        if lastport.is_focus():
+            self.group[-2].grab_focus()
+        self.outport_box.remove(lastport)
         if channels == 2:
             jack.unregister_port('output {} L'.format(self.output_n))
             jack.unregister_port('output {} R'.format(self.output_n))
@@ -367,6 +421,7 @@ class Processor:
         self.output_n -= 1
         self.group.pop()
         self.output_ports.pop()
+        self.unbind(self.output_n)
 
     def quit(self, *args):
         jack.deactivate()
@@ -406,6 +461,7 @@ class Processor:
         return True
 
 class fake_key:
+    #fake keypress class for global keybinding
     string = ''
     keyval = ''
     def __init__(self):
