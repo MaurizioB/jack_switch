@@ -53,7 +53,7 @@ keyboard shortcuts. You can use number keys (or F-keys enabling -f switch),
 eventually associated with keyboard modifiers (see -k) for global keybindings
 when the application is not focused.
 
-##Optional arguments:  
+####Optional arguments:  
 
 -o n, --outputs n (default and minimum: 2)  
 Number of outputs (output pairs for stereo); maximum is 10 for stereo, 20 for mono  
