@@ -158,11 +158,30 @@ class Processor:
         self.setter = gtk.CheckButton(label='E_xclusive')
         self.setter.set_can_focus(False)
         self.setter.connect('realize', self.restyle)
+        #TODO valuta se si può togliere il valore di self.exclusive o gestirlo meglio
         self.exclusive = exclusive
         self.setter.set_active(self.exclusive)
+        toolbox.pack_start(self.setter, False, False, 0)
+
+        #TODO add cmdline support for fullmute
         self.fullmute = gtk.CheckButton(label='Allow _full mute')
         self.fullmute.set_can_focus(False)
-        btns = gtk.HBox()
+        toolbox.pack_start(self.fullmute, False, False, 0)
+
+        btns = gtk.HBox(True)
+        self.full_btn = gtk.Button('All')
+        self.full_btn.set_can_focus(False)
+        self.full_btn.connect('clicked', self.activate_all, True)
+        self.full_btn.set_sensitive(not self.exclusive)
+        self.none_btn = gtk.Button('None')
+        self.none_btn.set_can_focus(False)
+        self.none_btn.connect('clicked', self.activate_all, False)
+        self.none_btn.set_sensitive(self.fullmute.get_active())
+        btns.pack_start(self.full_btn, True, True, 0)
+        btns.pack_start(self.none_btn, True, True, 0)
+        toolbox.pack_start(btns, False, False, 0)
+
+        btns = gtk.HBox(True)
         add_btn = gtk.Button('+')
         add_btn.set_can_focus(False)
         add_btn.connect('clicked', self.add_ports)
@@ -171,13 +190,12 @@ class Processor:
         del_btn.connect('clicked', self.del_ports)
         btns.pack_start(add_btn, True, True, 0)
         btns.pack_start(del_btn, True, True, 0)
-        toolbox.pack_start(self.setter, False, False, 0)
-        toolbox.pack_start(self.fullmute, False, False, 0)
         toolbox.pack_start(btns, False, False, 0)
 
         self.outport_box = gtk.VBox()
         self.group = []
         self.setter.connect('toggled', self.toggle_exclusive)
+        self.fullmute.connect('toggled', self.toggle_fullmute)
 
         for o in range(self.output_n):
             item = gtk.CheckButton(label='output {}'.format(o+1))
@@ -314,15 +332,27 @@ class Processor:
     def toggle_exclusive(self, widget):
         if not widget.get_active():
             self.fullmute.set_sensitive(False)
+            self.full_btn.set_sensitive(True)
+            self.none_btn.set_sensitive(True)
             self.exclusive = False
         else:
             self.fullmute.set_sensitive(True)
+            self.full_btn.set_sensitive(False)
+            self.none_btn.set_sensitive(self.fullmute.get_active())
             self.exclusive = True
             for i, item in enumerate(self.group):
                 if i != self.active:
                     item.set_active(False)
                 else:
                     item.set_active(True)
+
+    def toggle_fullmute(self, widget):
+        #TODO verifica che ci siano output attivi
+        if widget.get_active():
+            self.none_btn.set_sensitive(True)
+        else:
+            self.group[self.active].set_active(True)
+            self.none_btn.set_sensitive(False)
 
     def keypress(self, widget, event, fake=False):
         if fake or event.string.isdigit():
@@ -370,6 +400,10 @@ class Processor:
             self.setter.set_active(not self.setter.get_active())
         elif event.keyval == gtk.keysyms.f:
             self.fullmute.set_active(not self.fullmute.get_active())
+        elif event.keyval == gtk.keysyms.a and not self.exclusive:
+            self.activate_all(None, True)
+        elif event.keyval == gtk.keysyms.n and (self.fullmute.get_active() or not self.exclusive):
+            self.activate_all(None, False)
         elif event.keyval == gtk.keysyms.plus:
             self.add_ports()
         elif event.keyval == gtk.keysyms.minus:
@@ -411,6 +445,11 @@ class Processor:
                     #if funkey: fk = funkey+'+'
                     #else: fk = ''
                     #print 'Error! Check configuration or try custom key modifiers ({}{}{})'.format(mod, fk, i+1)
+
+    def activate_all(self, widget, selected):
+        for item in self.group:
+            item.set_active(selected)
+        
 
     def add_ports(self, widget=None):
         if (self.output_n == 10 and channels == 2) or (self.output_n == 20):

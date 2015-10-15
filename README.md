@@ -44,9 +44,10 @@ Requirements:
 Usage:
 ------
 
-    jack_switch.py [-h] [-o n] [-m] [-x] [-k] [--modifiers \<Mod1\>\<Mod2\>\<...\>] [-f] [-q]
+    ./jack_switch.py [arguments]
 
-Without any argument, jack_switch will start with stereo inputs and 2 stereo outputs.  
+Without any argument, jack_switch will start with 2 stereo inputs and 2 pairs
+of stereo outputs.  
 Just connect the input port[s] with your jack client output and output ports
 with your plugins, system outputs... Then toggle the outputs using the GUI or
 keyboard shortcuts. You can use number keys (or F-keys enabling -f switch),
@@ -55,20 +56,33 @@ when the application is not focused.
 
 ####Optional arguments:  
 
+-h, --help  
+Show usage help  
+
 -o n, --outputs n (default and minimum: 2)  
-Number of outputs (output pairs for stereo); maximum is 10 for stereo, 20 for mono  
+Number of outputs (output pairs for stereo); maximum is 10 for stereo, 20 for
+mono  
 
 -m, --mono  
-Set mono inputs and outputs, if not specified jack_switch will create stereo input and outputs  
+Set mono inputs and outputs, if not specified jack_switch will create stereo
+input and outputs  
+
+-I client:port[*], --input client:port[*]  
+jack port[s] to try to auto connect to its inputs on startup (accepts regex)  
+
+-O client:port[*], --output client:port[*]  
+jack port[s] to try to auto connect to its outputs on startup (accepts regex)  
 
 -x, --no-exclusive  
 Disable exclusive mode on startup, can be overrided from the GUI  
 
 -k, --keyboard  
-Enable global keyboard shortcut support (default uses modifier+n, where *modifier* is the 'Win' key and *n* is the output number, starting from 1)  
+Enable global keyboard shortcut support (default uses modifier+n, where
+*modifier* is the 'Win' key and *n* is the output number, starting from 1)  
 
 --modifiers "\<Mod1\>\<Mod2\>\<...\>"  
-Keyboard modifiers (\<Super\> - aka *Windows key*, \<Ctrl\>, \<Alt\>, ...). Implies *-k*  
+Keyboard modifiers (\<Super\> - aka *Windows key*, \<Ctrl\>, \<Alt\>, ...),
+remember to use quotes; implies *-k*  
 
 -f, --func-keys  
 Use F keys instead of numbers for global keyboard shortcut support. Implies *-k*  
